@@ -34,8 +34,10 @@ let speak;
 const CTX = c.getContext('2d');         // visible canvas
 const MAP = c.cloneNode();              // full map rendered off screen
 const MAP_CTX = MAP.getContext('2d');
-MAP.width = 640;                        // map size
-MAP.height = 480;
+MAP.width = 480;                        // map size
+MAP.height = 360;
+const PAINT = MAP.cloneNode();              // full map rendered off screen
+const PAINT_CTX = PAINT.getContext('2d');
 const VIEWPORT = c.cloneNode();           // visible portion of map/viewport
 const VIEWPORT_CTX = VIEWPORT.getContext('2d');
 VIEWPORT.width = 320;                      // viewport size
@@ -48,6 +50,9 @@ const CAMERA_WINDOW_WIDTH = VIEWPORT.width - CAMERA_WINDOW_X;
 const CAMERA_WINDOW_HEIGHT = VIEWPORT.height - CAMERA_WINDOW_Y;
 let viewportOffsetX = 0;
 let viewportOffsetY = 0;
+
+const BLUE_PAINT = '#00a';
+let bluePercentage = 0;
 
 const ATLAS = {
   hero: {
@@ -106,6 +111,7 @@ function startGame() {
     createEntity('foe', 116, 100),
   ];
   renderMap();
+  resetPaint();
   screen = GAME_SCREEN;
 };
 
@@ -290,6 +296,13 @@ function update() {
       }
       updateHeroInput();
       entities.forEach(updateEntity);
+      if (hero.paint) {
+        PAINT_CTX.fillStyle = BLUE_PAINT;
+        PAINT_CTX.beginPath() 
+        PAINT_CTX.arc(hero.x + hero.w / 2, hero.y + hero.h / 2, 10, 0, 2*Math.PI);
+        PAINT_CTX.fill();
+        PAINT_CTX.closePath();
+      }
       entities.slice(1).forEach((entity) => {
         const test = testAABBCollision(hero, entity);
         if (test.collide) {
@@ -298,6 +311,7 @@ function update() {
       });
       constrainToViewport(hero);
       updateCameraWindow();
+      bluePercentage = countColors();
       break;
   }
 };
@@ -332,8 +346,15 @@ function render() {
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
+      VIEWPORT_CTX.drawImage(
+        PAINT,
+        // adjust x/y offset
+        viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
+        0, 0, VIEWPORT.width, VIEWPORT.height
+      );
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
-      renderCountdown();
+      //renderCountdown();
+      renderText(`blue: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       // uncomment to debug mobile input handlers
       // renderDebugTouch();
       entities.forEach(entity => renderEntity(entity));
@@ -365,10 +386,45 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
 };
 
 function renderMap() {
-  MAP_CTX.fillStyle = '#fff';
+  MAP_CTX.fillStyle = '#aaa';
   MAP_CTX.fillRect(0, 0, MAP.width, MAP.height);
   // TODO cache map by rendering static entities on the MAP canvas
+  MAP_CTX.fillStyle = '#666';
+  const SIZE = 40;
+  for (let y = 0; y < MAP.height; y += SIZE) {
+    for (let x = 0; x < MAP.width; x += 2*SIZE) {
+      MAP_CTX.fillRect(x - ((y/SIZE)%2)*SIZE, y, SIZE, SIZE);
+    }
+  }
 };
+
+// 0-255 -> 0-f
+const toHex = i => (i>>4).toString(16)
+
+function countColors() {
+  const imageData = PAINT_CTX.getImageData(0, 0, PAINT.width, PAINT.height);
+  const totalPixel = imageData.width * imageData.height;
+  const colorPixels = {[BLUE_PAINT]: 0};
+  const data = imageData.data;
+  // number of pixels indexed by colors (e.g. blue = 42 out of 1024)
+  for (let p = 0; p < data.length; p += 4) {
+    const color = `#${toHex(data[p])}${toHex(data[p+1])}${toHex(data[p+2])}`;
+    const alpha = data[p+3];
+    if (alpha === 255) {
+      colorPixels[color] = (colorPixels[color] || 0) + 1;
+    }
+  }
+  // pixel counts to percentage of total pixels (e.g. blue = 4.2%)
+  for (const [color, pixels] of Object.entries(colorPixels)) {
+    colorPixels[color] = pixels * 100 / totalPixel;
+  }
+  return colorPixels[BLUE_PAINT].toFixed(2);
+}
+
+function resetPaint() {
+  PAINT_CTX.clearRect(0, 0, PAINT.width, PAINT.height);
+  bluePercentage = 0;
+}
 
 // LOOP HANDLERS
 
@@ -415,7 +471,7 @@ onresize = onrotate = function() {
   c.width = VIEWPORT.width * scaleToFit;
   c.height = VIEWPORT.height * scaleToFit;
   // disable smoothing on image scaling
-  CTX.imageSmoothingEnabled = MAP_CTX.imageSmoothingEnabled = VIEWPORT_CTX.imageSmoothingEnabled = false;
+  CTX.imageSmoothingEnabled = false;
 
   // fix key events not received on itch.io when game loads in full screen
   window.focus();
@@ -455,6 +511,9 @@ onkeydown = function(e) {
           case 'ArrowDown':
           case 'KeyS':
             hero.moveDown = currentTime;
+            break;
+          case 'Space':
+            hero.paint = currentTime;
             break;
           case 'KeyP':
             // Pause game as soon as key is pressed
@@ -510,6 +569,9 @@ onkeyup = function(e) {
             hero.moveUp = currentTime;
           }
           hero.moveDown = 0;
+          break;
+        case 'Space':
+          hero.paint = 0;
           break;
         }
       break;
