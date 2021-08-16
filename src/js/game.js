@@ -4,7 +4,7 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
+import { choice, getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
 import TILESET from '../img/tileset.webp';
 
 
@@ -218,16 +218,16 @@ function constrainToViewport(entity) {
 function updateCameraWindow() {
   // edge snapping
   if (0 < viewportOffsetX && hero.x < viewportOffsetX + CAMERA_WINDOW_X) {
-    viewportOffsetX = Math.max(0, hero.x - CAMERA_WINDOW_X);
+    viewportOffsetX = Math.max(0, Math.round(hero.x - CAMERA_WINDOW_X));
   }
   else if (viewportOffsetX < MAP.width - VIEWPORT.width && hero.x + hero.w > viewportOffsetX + CAMERA_WINDOW_WIDTH) {
-    viewportOffsetX = Math.min(MAP.width - VIEWPORT.width, hero.x + hero.w - CAMERA_WINDOW_WIDTH);
+    viewportOffsetX = Math.min(MAP.width - VIEWPORT.width, Math.round(hero.x + hero.w - CAMERA_WINDOW_WIDTH));
   }
   if (0 < viewportOffsetY && hero.y < viewportOffsetY + CAMERA_WINDOW_Y) {
-    viewportOffsetY = Math.max(0, hero.y - CAMERA_WINDOW_Y);
+    viewportOffsetY = Math.max(0, Math.round(hero.y - CAMERA_WINDOW_Y));
   }
   else if (viewportOffsetY < MAP.height - VIEWPORT.height && hero.y + hero.h > viewportOffsetY + CAMERA_WINDOW_HEIGHT) {
-    viewportOffsetY = Math.min(MAP.height - VIEWPORT.height, hero.y + hero.h - CAMERA_WINDOW_HEIGHT);
+    viewportOffsetY = Math.min(MAP.height - VIEWPORT.height, Math.round(hero.y + hero.h - CAMERA_WINDOW_HEIGHT));
   }
 };
 
@@ -288,7 +288,7 @@ function updateEntity(entity) {
 };
 
 function paintSplash() {
-  PAINT_CTX.fillStyle = BLUE_PAINT;
+  PAINT_CTX.fillStyle = choice([BLUE_PAINT, '#a00', '#0a0', '#a0a', '#aa0', '#0aa'])
   const offsetX = randInt(-10, 10);
   const offsetY = randInt(-10, 10);
   const width = randInt(5, 20);
@@ -316,7 +316,9 @@ function update() {
       });
       constrainToViewport(hero);
       updateCameraWindow();
-      bluePercentage = countColors();
+      // computational intensive... either run once every 1s (enough, but 1 frame will pay the cost)
+      // or run on a scaled down copy of the paint canvas (less pixels to count)
+      // bluePercentage = countColors();
       break;
   }
 };
@@ -324,6 +326,8 @@ function update() {
 // RENDER HANDLERS
 
 function blit() {
+  CTX.fillStyle = '#fff';
+  CTX.fillRect(0, 0, c.width, c.height);
   // copy backbuffer onto visible canvas, scaling it to screen dimensions
   CTX.drawImage(
     VIEWPORT,
@@ -333,8 +337,7 @@ function blit() {
 };
 
 function render() {
-  VIEWPORT_CTX.fillStyle = '#fff';
-  VIEWPORT_CTX.fillRect(0, 0, VIEWPORT.width, VIEWPORT.height);
+  VIEWPORT_CTX.clearRect(0, 0, VIEWPORT.width, VIEWPORT.height);
 
   switch (screen) {
     case TITLE_SCREEN:
@@ -351,12 +354,17 @@ function render() {
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
+      VIEWPORT_CTX.save();
+      // only draw the paint that covers non-transparent area of the map/level
+      VIEWPORT_CTX.globalCompositeOperation = 'source-in';
       VIEWPORT_CTX.drawImage(
         PAINT,
         // adjust x/y offset
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
+      // reset composition mode
+      VIEWPORT_CTX.restore();
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
       //renderCountdown();
       renderText(`blue: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
@@ -391,8 +399,8 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
 };
 
 function renderMap() {
-  MAP_CTX.fillStyle = '#aaa';
-  MAP_CTX.fillRect(0, 0, MAP.width, MAP.height);
+//  MAP_CTX.fillStyle = '#aaa';
+//  MAP_CTX.fillRect(0, 0, MAP.width, MAP.height);
   // TODO cache map by rendering static entities on the MAP canvas
   MAP_CTX.fillStyle = '#666';
   const SIZE = 40;
@@ -403,9 +411,11 @@ function renderMap() {
   }
 };
 
-// 0-255 -> 0-f
+// 0-255 -> 0-16/f
 const toHex = i => (i>>4).toString(16)
 
+// works (but cycle expensive) if no globalCompoisitionMode.
+// with source-in, will need to work on a copy of paint where composition has been applied
 function countColors() {
   const imageData = PAINT_CTX.getImageData(0, 0, PAINT.width, PAINT.height);
   const totalPixel = imageData.width * imageData.height;
