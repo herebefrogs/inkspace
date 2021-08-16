@@ -4,7 +4,7 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { getRandSeed, setRandSeed, lerp, loadImg } from './utils';
+import { getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
 import TILESET from '../img/tileset.webp';
 
 
@@ -98,17 +98,17 @@ function startGame() {
   hero = createEntity('hero', VIEWPORT.width / 2, VIEWPORT.height / 2);
   entities = [
     hero,
-    createEntity('foe', 10, 10),
-    createEntity('foe', 630 - 16, 10),
-    createEntity('foe', 630 - 16, 470 - 18),
-    createEntity('foe', 300, 200),
-    createEntity('foe', 400, 300),
-    createEntity('foe', 500, 400),
-    createEntity('foe', 10, 470 - 18),
-    createEntity('foe', 100, 100),
-    createEntity('foe', 100, 118),
-    createEntity('foe', 116, 118),
-    createEntity('foe', 116, 100),
+    // createEntity('foe', 10, 10),
+    // createEntity('foe', 630 - 16, 10),
+    // createEntity('foe', 630 - 16, 470 - 18),
+    // createEntity('foe', 300, 200),
+    // createEntity('foe', 400, 300),
+    // createEntity('foe', 500, 400),
+    // createEntity('foe', 10, 470 - 18),
+    // createEntity('foe', 100, 100),
+    // createEntity('foe', 100, 118),
+    // createEntity('foe', 116, 118),
+    // createEntity('foe', 116, 100),
   ];
   renderMap();
   resetPaint();
@@ -287,6 +287,15 @@ function updateEntity(entity) {
   entity.y += distance * entity.moveY;
 };
 
+function paintSplash() {
+  PAINT_CTX.fillStyle = BLUE_PAINT;
+  const offsetX = randInt(-10, 10);
+  const offsetY = randInt(-10, 10);
+  const width = randInt(5, 20);
+  const height = randInt(5, 20);
+  PAINT_CTX.fillRect(Math.round(hero.x+hero.w/2 + offsetX), Math.round(hero.y+hero.h/2 + offsetY), width, height);
+}
+
 function update() {
   switch (screen) {
     case GAME_SCREEN:
@@ -297,11 +306,7 @@ function update() {
       updateHeroInput();
       entities.forEach(updateEntity);
       if (hero.paint) {
-        PAINT_CTX.fillStyle = BLUE_PAINT;
-        PAINT_CTX.beginPath() 
-        PAINT_CTX.arc(hero.x + hero.w / 2, hero.y + hero.h / 2, 10, 0, 2*Math.PI);
-        PAINT_CTX.fill();
-        PAINT_CTX.closePath();
+        paintSplash();
       }
       entities.slice(1).forEach((entity) => {
         const test = testAABBCollision(hero, entity);
