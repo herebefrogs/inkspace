@@ -38,6 +38,10 @@ MAP.width = 480;                        // map size
 MAP.height = 360;
 const PAINT = MAP.cloneNode();              // full map rendered off screen
 const PAINT_CTX = PAINT.getContext('2d');
+const MINI_PAINT = c.cloneNode();
+MINI_PAINT.width = 160;
+MINI_PAINT.height = 120;
+const MINI_PAINT_CTX = MINI_PAINT.getContext('2d');
 const VIEWPORT = c.cloneNode();           // visible portion of map/viewport
 const VIEWPORT_CTX = VIEWPORT.getContext('2d');
 VIEWPORT.width = 320;                      // viewport size
@@ -53,6 +57,7 @@ let viewportOffsetY = 0;
 
 const BLUE_PAINT = '#00a';
 let bluePercentage = 0;
+let hue = 0;
 
 const ATLAS = {
   hero: {
@@ -218,16 +223,16 @@ function constrainToViewport(entity) {
 function updateCameraWindow() {
   // edge snapping
   if (0 < viewportOffsetX && hero.x < viewportOffsetX + CAMERA_WINDOW_X) {
-    viewportOffsetX = Math.max(0, hero.x - CAMERA_WINDOW_X);
+    viewportOffsetX = Math.max(0, Math.round(hero.x - CAMERA_WINDOW_X));
   }
   else if (viewportOffsetX < MAP.width - VIEWPORT.width && hero.x + hero.w > viewportOffsetX + CAMERA_WINDOW_WIDTH) {
-    viewportOffsetX = Math.min(MAP.width - VIEWPORT.width, hero.x + hero.w - CAMERA_WINDOW_WIDTH);
+    viewportOffsetX = Math.min(MAP.width - VIEWPORT.width, Math.round(hero.x + hero.w - CAMERA_WINDOW_WIDTH));
   }
   if (0 < viewportOffsetY && hero.y < viewportOffsetY + CAMERA_WINDOW_Y) {
-    viewportOffsetY = Math.max(0, hero.y - CAMERA_WINDOW_Y);
+    viewportOffsetY = Math.max(0, Math.round(hero.y - CAMERA_WINDOW_Y));
   }
   else if (viewportOffsetY < MAP.height - VIEWPORT.height && hero.y + hero.h > viewportOffsetY + CAMERA_WINDOW_HEIGHT) {
-    viewportOffsetY = Math.min(MAP.height - VIEWPORT.height, hero.y + hero.h - CAMERA_WINDOW_HEIGHT);
+    viewportOffsetY = Math.min(MAP.height - VIEWPORT.height, Math.round(hero.y + hero.h - CAMERA_WINDOW_HEIGHT));
   }
 };
 
@@ -288,7 +293,8 @@ function updateEntity(entity) {
 };
 
 function paintSplash() {
-  PAINT_CTX.fillStyle = BLUE_PAINT;
+  hue = (hue + 1) % 360;
+  PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
   const offsetX = randInt(-10, 10);
   const offsetY = randInt(-10, 10);
   const width = randInt(5, 20);
@@ -359,7 +365,7 @@ function render() {
       );
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
       //renderCountdown();
-      renderText(`blue: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+      renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       // uncomment to debug mobile input handlers
       // renderDebugTouch();
       entities.forEach(entity => renderEntity(entity));
@@ -407,23 +413,25 @@ function renderMap() {
 const toHex = i => (i>>4).toString(16)
 
 function countColors() {
-  const imageData = PAINT_CTX.getImageData(0, 0, PAINT.width, PAINT.height);
-  const totalPixel = imageData.width * imageData.height;
-  const colorPixels = {[BLUE_PAINT]: 0};
+  // make a scaled down version of PAINT
+  // to reduce the number of pixels we have to count colors on
+  MINI_PAINT_CTX.drawImage(
+    PAINT,
+    0, 0, PAINT.width, PAINT.height,
+    0, 0, MINI_PAINT.width, MINI_PAINT.height,
+  );
+
+  const imageData = MINI_PAINT_CTX.getImageData(0, 0, MINI_PAINT.width, MINI_PAINT.height);
+  const totalPixels = imageData.width * imageData.height;
+  let coloredPixels = 0;
   const data = imageData.data;
-  // number of pixels indexed by colors (e.g. blue = 42 out of 1024)
   for (let p = 0; p < data.length; p += 4) {
-    const color = `#${toHex(data[p])}${toHex(data[p+1])}${toHex(data[p+2])}`;
-    const alpha = data[p+3];
-    if (alpha === 255) {
-      colorPixels[color] = (colorPixels[color] || 0) + 1;
+    if (data[p+3] >= 250) {
+      coloredPixels += 1;
     }
   }
   // pixel counts to percentage of total pixels (e.g. blue = 4.2%)
-  for (const [color, pixels] of Object.entries(colorPixels)) {
-    colorPixels[color] = pixels * 100 / totalPixel;
-  }
-  return colorPixels[BLUE_PAINT].toFixed(2);
+  return (coloredPixels*100/totalPixels).toFixed(2);
 }
 
 function resetPaint() {
