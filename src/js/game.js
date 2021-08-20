@@ -31,21 +31,16 @@ let speak;
 
 // RENDER VARIABLES
 
-const CTX = c.getContext('2d');         // visible canvas
-const MAP = c.cloneNode();              // full map rendered off screen
-const MAP_CTX = MAP.getContext('2d');
-MAP.width = 480;                        // map size
-MAP.height = 360;
-const PAINT = MAP.cloneNode();              // full map rendered off screen
-const PAINT_CTX = PAINT.getContext('2d');
-const MINI_PAINT = c.cloneNode();
-MINI_PAINT.width = 160;
-MINI_PAINT.height = 120;
-const MINI_PAINT_CTX = MINI_PAINT.getContext('2d');
-const VIEWPORT = c.cloneNode();           // visible portion of map/viewport
-const VIEWPORT_CTX = VIEWPORT.getContext('2d');
-VIEWPORT.width = 320;                      // viewport size
-VIEWPORT.height = 240;
+// visible canvas (size will be readjusted on load and on resize)
+const [CTX] = createCanvas(480, 360, c);
+// full map, rendered off screen
+const [MAP_CTX, MAP] = createCanvas(480, 360);
+// paint layer, rendered off screen
+const [PAINT_CTX, PAINT] = createCanvas(480, 360);
+// shrunk down version of paint layer to optimize % of captured space calculation
+const [MINI_PAINT_CTX, MINI_PAINT] = createCanvas(160, 120);
+// visible portion of the map, seen from camera
+const [VIEWPORT_CTX, VIEWPORT] = createCanvas(320, 240);
 
 // camera-window & edge-snapping settings
 const CAMERA_WINDOW_X = 100;
@@ -328,6 +323,14 @@ function update() {
 };
 
 // RENDER HANDLERS
+
+function createCanvas(width, height, canvas, ctx) {
+  canvas = canvas || c.cloneNode();
+  canvas.width = width;
+  canvas.height = height;
+  ctx = canvas.getContext('2d');
+  return [ctx, canvas];
+}
 
 function blit() {
   // copy backbuffer onto visible canvas, scaling it to screen dimensions
