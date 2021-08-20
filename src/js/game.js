@@ -4,7 +4,7 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
+import { clamp, getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
 import TILESET from '../img/tileset.webp';
 
 
@@ -18,13 +18,15 @@ const GAME_SCREEN = 1;
 const END_SCREEN = 2;
 let screen = TITLE_SCREEN;
 
-// factor by which to reduce both moveX and moveY when player moving diagonally
+// factor by which to reduce both X and Y velocity when player moving diagonally
 // so they don't seem to move faster than when traveling vertically or horizontally
-const RADIUS_ONE_AT_45_DEG = Math.cos(Math.PI / 4);
+// (equals radius of 1 unit at 45 deg angle)
+const DIAGONAL_VELOCITY_DRAG = Math.cos(Math.PI / 4);
 const TIME_TO_FULL_SPEED = 150;                // in millis, duration till going full speed in any direction
 
 let countdown; // in seconds
 let hero;
+let crosshair; // coordinate in viewport space (add viewportOffset to convert to map space)
 let entities;
 
 let speak;
@@ -47,8 +49,10 @@ const CAMERA_WINDOW_X = 100;
 const CAMERA_WINDOW_Y = 50;
 const CAMERA_WINDOW_WIDTH = VIEWPORT.width - CAMERA_WINDOW_X;
 const CAMERA_WINDOW_HEIGHT = VIEWPORT.height - CAMERA_WINDOW_Y;
-let viewportOffsetX = 0;
-let viewportOffsetY = 0;
+let viewportOffsetX;
+let viewportOffsetY;
+let canvasX;
+let scaleToFit;
 
 const BLUE_PAINT = '#00a';
 let bluePercentage = 0;
@@ -110,6 +114,10 @@ function startGame() {
     // createEntity('foe', 116, 118),
     // createEntity('foe', 116, 100),
   ];
+  crosshair = {
+    view: { x: hero.x, y: hero.y },
+    map: {}
+  };
   renderMap();
   resetPaint();
   screen = GAME_SCREEN;
@@ -144,7 +152,7 @@ function correctAABBCollision(entity1, entity2, test) {
   // because just pushing along one axis by the distance overlapped)
 
   // entity1 moving down/right
-  if (entity1.moveX > 0 && entity1.moveY > 0) {
+  if (entity1.velX > 0 && entity1.velY > 0) {
     if (deltaMaxX < deltaMaxY) {
       // collided right side first
       entity1.x -= deltaMaxX;
@@ -154,7 +162,7 @@ function correctAABBCollision(entity1, entity2, test) {
     }
   }
   // entity1 moving up/right
-  else if (entity1.moveX > 0 && entity1.moveY < 0) {
+  else if (entity1.velX > 0 && entity1.velY < 0) {
     if (deltaMaxX < deltaMinY) {
       // collided right side first
       entity1.x -= deltaMaxX;
@@ -164,11 +172,11 @@ function correctAABBCollision(entity1, entity2, test) {
     }
   }
   // entity1 moving right
-  else if (entity1.moveX > 0) {
+  else if (entity1.velX > 0) {
     entity1.x -= deltaMaxX;
   }
   // entity1 moving down/left
-  else if (entity1.moveX < 0 && entity1.moveY > 0) {
+  else if (entity1.velX < 0 && entity1.velY > 0) {
     if (deltaMinX < deltaMaxY) {
       // collided left side first
       entity1.x += deltaMinX;
@@ -178,7 +186,7 @@ function correctAABBCollision(entity1, entity2, test) {
     }
   }
   // entity1 moving up/left
-  else if (entity1.moveX < 0 && entity1.moveY < 0) {
+  else if (entity1.velX < 0 && entity1.velY < 0) {
     if (deltaMinX < deltaMinY) {
       // collided left side first
       entity1.x += deltaMinX;
@@ -188,15 +196,15 @@ function correctAABBCollision(entity1, entity2, test) {
     }
   }
   // entity1 moving left
-  else if (entity1.moveX < 0) {
+  else if (entity1.velX < 0) {
     entity1.x += deltaMinX;
   }
   // entity1 moving down
-  else if (entity1.moveY > 0) {
+  else if (entity1.velY > 0) {
     entity1.y -= deltaMaxY;
   }
   // entity1 moving up
-  else if (entity1.moveY < 0) {
+  else if (entity1.velY < 0) {
     entity1.y += deltaMinY;
   }
 };
@@ -231,6 +239,16 @@ function updateCameraWindow() {
   }
 };
 
+function updateEntityViewportPosition(entity) {
+  entity.view.x = Math.round(entity.x - viewportOffsetX);
+  entity.view.y = Math.round(entity.y - viewportOffsetY);
+}
+
+function updateCrosshairMapPosition() {
+  crosshair.x = Math.round(crosshair.view.x + viewportOffsetX);
+  crosshair.y = Math.round(crosshair.view.y + viewportOffsetY);
+}
+
 function createEntity(type, x = 0, y = 0) {
   const action = 'move';
   const sprite = ATLAS[type][action][0];
@@ -243,36 +261,40 @@ function createEntity(type, x = 0, y = 0) {
     moveLeft: 0,
     moveRight: 0,
     moveUp: 0,
-    moveX: 0,
-    moveY: 0,
+    // coordinates in VIEWPORT space (MAP - VIEWPORT offset)
+    view: {},
+    velX: 0,
+    velY: 0,
     speed: ATLAS[type].speed,
     type,
     w: sprite.w,
+    // coordinates in MAP space
     x,
     y,
   };
 };
 
-function updateHeroInput() {
-  // TODO can touch & desktop be handled the same way?
-  if (isTouch) {
-    hero.moveX = hero.moveLeft + hero.moveRight;
-    hero.moveY = hero.moveUp + hero.moveDown;
+function updateHeroVelocity() {
+  if (hero.moveLeft || hero.moveRight) {
+    hero.velX = (hero.moveLeft > hero.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveLeft, hero.moveRight)) / TIME_TO_FULL_SPEED)
   } else {
-    if (hero.moveLeft || hero.moveRight) {
-      hero.moveX = (hero.moveLeft > hero.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveLeft, hero.moveRight)) / TIME_TO_FULL_SPEED)
-    } else {
-      hero.moveX = 0;
-    }
-    if (hero.moveDown || hero.moveUp) {
-      hero.moveY = (hero.moveUp > hero.moveDown ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveUp, hero.moveDown)) / TIME_TO_FULL_SPEED)
-    } else {
-      hero.moveY = 0;
-    }
+    hero.velX = 0;
+  }
+  if (hero.moveDown || hero.moveUp) {
+    hero.velY = (hero.moveUp > hero.moveDown ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveUp, hero.moveDown)) / TIME_TO_FULL_SPEED)
+  } else {
+    hero.velY = 0;
   }
 }
 
-function updateEntity(entity) {
+function updateEntityPosition(entity) {
+  // update position
+  const ratio = entity.velX && entity.velY ? DIAGONAL_VELOCITY_DRAG : 1;
+  const distance = entity.speed * elapsedTime * ratio;
+  entity.x += distance * entity.velX;
+  entity.y += distance * entity.velY;
+
+  // TODO: this should be in its own function as it's sometime affected by the entity state (dead, dying, moving...)
   // update animation frame
   entity.frameTime += elapsedTime;
   if (entity.frameTime > FRAME_DURATION) {
@@ -280,12 +302,11 @@ function updateEntity(entity) {
     entity.frame += 1;
     entity.frame %= ATLAS[entity.type][entity.action].length;
   }
-  // update position
-  const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
-  const distance = entity.speed * elapsedTime * scale;
-  entity.x += distance * entity.moveX;
-  entity.y += distance * entity.moveY;
 };
+
+function painting() {
+  return hero.paintTime || crosshair.paintTime;
+}
 
 function paintSplash() {
   hue = (hue + 1) % 360;
@@ -294,21 +315,18 @@ function paintSplash() {
   const offsetY = randInt(-10, 10);
   const width = randInt(5, 20);
   const height = randInt(5, 20);
-  PAINT_CTX.fillRect(Math.round(hero.x+hero.w/2 + offsetX), Math.round(hero.y+hero.h/2 + offsetY), width, height);
+  PAINT_CTX.fillRect(crosshair.x + offsetX, crosshair.y + offsetY, width, height);
 }
 
 function update() {
   switch (screen) {
     case GAME_SCREEN:
-      countdown -= elapsedTime;
+      // countdown -= elapsedTime;
       if (countdown < 0) {
         screen = END_SCREEN;
       }
-      updateHeroInput();
-      entities.forEach(updateEntity);
-      if (hero.paint) {
-        paintSplash();
-      }
+      updateHeroVelocity();
+      entities.forEach(updateEntityPosition);
       entities.slice(1).forEach((entity) => {
         const test = testAABBCollision(hero, entity);
         if (test.collide) {
@@ -317,6 +335,11 @@ function update() {
       });
       constrainToViewport(hero);
       updateCameraWindow();
+      entities.forEach(updateEntityViewportPosition);
+      updateCrosshairMapPosition();
+      if (painting()) {
+        paintSplash();
+      }
       bluePercentage = countColors();
       break;
   }
@@ -369,9 +392,8 @@ function render() {
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
       //renderCountdown();
       renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
-      // uncomment to debug mobile input handlers
-      // renderDebugTouch();
       entities.forEach(entity => renderEntity(entity));
+      renderCrosshair();
       break;
     case END_SCREEN:
       renderText('end screen', CHARSET_SIZE, CHARSET_SIZE);
@@ -381,6 +403,14 @@ function render() {
 
   blit();
 };
+
+function renderCrosshair() {
+  VIEWPORT_CTX.strokeStyle = painting() ? '#000' : '#fff';
+  VIEWPORT_CTX.lineWidth = 2;
+  VIEWPORT_CTX.strokeRect(crosshair.view.x - 1, crosshair.view.y - 1, 2, 2);
+  VIEWPORT_CTX.strokeRect(crosshair.view.x - 6, crosshair.view.y - 6, 12, 12);
+
+}
 
 function renderCountdown() {
   const minutes = Math.floor(Math.ceil(countdown) / 60);
@@ -395,7 +425,7 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
   ctx.drawImage(
     tileset,
     sprite.x, sprite.y, sprite.w, sprite.h,
-    Math.round(entity.x - viewportOffsetX), Math.round(entity.y - viewportOffsetY), sprite.w, sprite.h
+    entity.view.x, entity.view.y, sprite.w, sprite.h
   );
 };
 
@@ -483,12 +513,13 @@ onload = async (e) => {
 
 onresize = onrotate = function() {
   // scale canvas to fit screen while maintaining aspect ratio
-  const scaleToFit = Math.min(innerWidth / VIEWPORT.width, innerHeight / VIEWPORT.height);
+  scaleToFit = Math.min(innerWidth / VIEWPORT.width, innerHeight / VIEWPORT.height);
   c.width = VIEWPORT.width * scaleToFit;
   c.height = VIEWPORT.height * scaleToFit;
   // disable smoothing on image scaling
   CTX.imageSmoothingEnabled = false;
 
+  canvasX = (window.innerWidth - c.width) / 2;
   // fix key events not received on itch.io when game loads in full screen
   window.focus();
 };
@@ -529,7 +560,7 @@ onkeydown = function(e) {
             hero.moveDown = currentTime;
             break;
           case 'Space':
-            hero.paint = currentTime;
+            hero.paintTime = currentTime;
             break;
           case 'KeyP':
             // Pause game as soon as key is pressed
@@ -587,7 +618,7 @@ onkeyup = function(e) {
           hero.moveDown = 0;
           break;
         case 'Space':
-          hero.paint = 0;
+          hero.paintTime = 0;
           break;
         }
       break;
@@ -606,22 +637,14 @@ onkeyup = function(e) {
 
 // MOBILE INPUT HANDLERS
 
-let minX = 0;
-let minY = 0;
-let maxX = 0;
-let maxY = 0;
-let MIN_DISTANCE = 30; // in px
-let touches = [];
-let isTouch = false;
-
 // PointerEvent is the main standard now, and has precedence over TouchEvent
 // adding onmousedown/move/up triggers a MouseEvent and a PointerEvent on platforms that support both (pointer > mouse || touch)
+
 onpointerdown = function(e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
-      isTouch = true;
-      [maxX, maxY] = [minX, minY] = pointerLocation(e);
+      crosshair.paintTime = currentTime;
       break;
   }
 };
@@ -630,9 +653,9 @@ onpointermove = function(e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
-      if (minX && minY) {
-        setTouchPosition(pointerLocation(e));
-      }
+      const [touchX, touchY] = pointerLocation(e);
+      crosshair.view.x = touchX;
+      crosshair.view.y = touchY;
       break;
   }
 }
@@ -644,11 +667,7 @@ onpointerup = function(e) {
       startGame();
       break;
     case GAME_SCREEN:
-      isTouch = false;
-      // stop hero
-      hero.moveLeft = hero.moveRight = hero.moveDown = hero.moveUp = 0;
-      // end touch
-      minX = minY = maxX = maxY = 0;
+      crosshair.paintTime = 0;
       break;
     case END_SCREEN:
       screen = TITLE_SCREEN;
@@ -662,98 +681,28 @@ function pointerLocation(e) {
   // for surface area of touch contact, use e.width and e.height (in CSS pixel) mutiplied by window.devicePixelRatio (for device pixels aka canvas pixels)
   // for canvas space coordinate, use e.layerX and .layerY when e.target = c
   // { id: e.pointerId, x: e.x, y: e.y, w: e.width*window.devicePixelRatio, h: e.height*window.devicePixelRatio};
-  return [e.x || e.pageX, e.Y || e.pageY];
-};
+  
+  const pointerInCanvas = e.target === c;
 
-function setTouchPosition([x, y]) {
-  // touch moving further right
-  if (x > maxX) {
-    maxX = x;
-    hero.moveRight = lerp(0, 1, (maxX - minX) / MIN_DISTANCE)
-  }
-  // touch moving further left
-  else if (x < minX) {
-    minX = x;
-    hero.moveLeft = -lerp(0, 1, (maxX - minX) / MIN_DISTANCE)
-  }
-  // touch reversing left while hero moving right
-  else if (x < maxX && hero.moveX >= 0) {
-    minX = x;
-    hero.moveRight = 0;
-  }
-  // touch reversing right while hero moving left
-  else if (minX < x && hero.moveX <= 0) {
-    maxX = x;
-    hero.moveLeft = 0;
+  if (pointerInCanvas) {
+    // touch/click happened on canvas, layerX/layerY are already in canvas space
+    return [
+      Math.round(e.layerX / scaleToFit),
+      Math.round(e.layerY / scaleToFit)
+    ];
   }
 
-  // touch moving further down
-  if (y > maxY) {
-    maxY = y;
-    hero.moveDown = lerp(0, 1, (maxY - minY) / MIN_DISTANCE)
-
-  }
-  // touch moving further up
-  else if (y < minY) {
-    minY = y;
-    hero.moveUp = -lerp(0, 1, (maxY - minY) / MIN_DISTANCE)
-
-  }
-  // touch reversing up while hero moving down
-  else if (y < maxY && hero.moveY >= 0) {
-    minY = y;
-    hero.moveDown = 0;
-  }
-  // touch reversing down while hero moving up
-  else if (minY < y && hero.moveY <= 0) {
-    maxY = y;
-    hero.moveUp = 0;
-  }
-
-  // uncomment to debug mobile input handlers
-  // addDebugTouch(x, y);
-};
-
-function addDebugTouch(x, y) {
-  touches.push([x / innerWidth * VIEWPORT.width, y / innerHeight * VIEWPORT.height]);
-  if (touches.length > 10) {
-    touches = touches.slice(touches.length - 10);
-  }
-};
-
-function renderDebugTouch() {
-  let x = maxX / innerWidth * VIEWPORT.width;
-  let y = maxY / innerHeight * VIEWPORT.height;
-  renderDebugTouchBound(x, x, 0, VIEWPORT.height, '#f00');
-  renderDebugTouchBound(0, VIEWPORT.width, y, y, '#f00');
-  x = minX / innerWidth * VIEWPORT.width;
-  y = minY / innerHeight * VIEWPORT.height;
-  renderDebugTouchBound(x, x, 0, VIEWPORT.height, '#ff0');
-  renderDebugTouchBound(0, VIEWPORT.width, y, y, '#ff0');
-
-  if (touches.length) {
-    VIEWPORT_CTX.strokeStyle = VIEWPORT_CTX.fillStyle =   '#02d';
-    VIEWPORT_CTX.beginPath();
-    [x, y] = touches[0];
-    VIEWPORT_CTX.moveTo(x, y);
-    touches.forEach(function([x, y]) {
-      VIEWPORT_CTX.lineTo(x, y);
-    });
-    VIEWPORT_CTX.stroke();
-    VIEWPORT_CTX.closePath();
-    VIEWPORT_CTX.beginPath();
-    [x, y] = touches[touches.length - 1];
-    VIEWPORT_CTX.arc(x, y, 2, 0, 2 * Math.PI)
-    VIEWPORT_CTX.fill();
-    VIEWPORT_CTX.closePath();
-  }
-};
-
-function renderDebugTouchBound(_minX, _maxX, _minY, _maxY, color) {
-  VIEWPORT_CTX.strokeStyle = color;
-  VIEWPORT_CTX.beginPath();
-  VIEWPORT_CTX.moveTo(_minX, _minY);
-  VIEWPORT_CTX.lineTo(_maxX, _maxY);
-  VIEWPORT_CTX.stroke();
-  VIEWPORT_CTX.closePath();
+  // touch/click happened outside of canvas (which is centered horizontally)
+  // x/pageX/y/pageY are in screen space, must be offset by canvas position then scaled down
+  // to be converted in canvas space
+  return [
+    clamp(
+      Math.round(((e.x || e.pageX) - canvasX) / scaleToFit),
+      0, VIEWPORT.width
+    ),
+    clamp(
+      Math.round((e.y || e.pageY) / scaleToFit),
+      0, VIEWPORT.height
+    )
+  ];
 };

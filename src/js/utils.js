@@ -76,6 +76,10 @@ export function choice(values) {
   return values[rand(0, values.length - 1)];
 };
 
+export function clamp(value, min, max) {
+  return value < min ? min : (value > max ? max : value);
+}
+
 // LERP
 
 /**
