@@ -614,9 +614,9 @@ let MIN_DISTANCE = 30; // in px
 let touches = [];
 let isTouch = false;
 
-// adding onmousedown/move/up triggers a MouseEvent and a PointerEvent
-// on platform that support both (duplicate event, pointer > mouse || touch)
-ontouchstart = onpointerdown = function(e) {
+// PointerEvent is the main standard now, and has precedence over TouchEvent
+// adding onmousedown/move/up triggers a MouseEvent and a PointerEvent on platforms that support both (pointer > mouse || touch)
+onpointerdown = function(e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
@@ -626,7 +626,7 @@ ontouchstart = onpointerdown = function(e) {
   }
 };
 
-ontouchmove = onpointermove = function(e) {
+onpointermove = function(e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
@@ -637,7 +637,7 @@ ontouchmove = onpointermove = function(e) {
   }
 }
 
-ontouchend = onpointerup = function(e) {
+onpointerup = function(e) {
   e.preventDefault();
   switch (screen) {
     case TITLE_SCREEN:
@@ -658,7 +658,11 @@ ontouchend = onpointerup = function(e) {
 
 // utilities
 function pointerLocation(e) {
-  return [e.pageX || e.changedTouches[0].pageX, e.pageY || e.changedTouches[0].pageY];
+  // for multiple pointers, use e.pointerId to differentiate (on desktop, mouse is always 1, on mobile every pointer even has a different id incrementing by 1)
+  // for surface area of touch contact, use e.width and e.height (in CSS pixel) mutiplied by window.devicePixelRatio (for device pixels aka canvas pixels)
+  // for canvas space coordinate, use e.layerX and .layerY when e.target = c
+  // { id: e.pointerId, x: e.x, y: e.y, w: e.width*window.devicePixelRatio, h: e.height*window.devicePixelRatio};
+  return [e.x || e.pageX, e.Y || e.pageY];
 };
 
 function setTouchPosition([x, y]) {
