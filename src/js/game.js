@@ -4,8 +4,9 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
+import { getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
 import TILESET from '../img/tileset.webp';
+import rough from '../lib/rough.esm';
 
 
 const konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
@@ -354,14 +355,16 @@ function render() {
       }
       break;
     case GAME_SCREEN:
+      // VIEWPORT_CTX.fillStyle = '#000';
+      // VIEWPORT_CTX.fillRect(0, 0, VIEWPORT.width, VIEWPORT.height);
       VIEWPORT_CTX.drawImage(
-        MAP,
+        PAINT,
         // adjust x/y offset
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
       VIEWPORT_CTX.drawImage(
-        PAINT,
+        MAP,
         // adjust x/y offset
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
@@ -400,16 +403,19 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
 };
 
 function renderMap() {
-  MAP_CTX.fillStyle = '#aaa';
-  MAP_CTX.fillRect(0, 0, MAP.width, MAP.height);
-  // TODO cache map by rendering static entities on the MAP canvas
-  MAP_CTX.fillStyle = '#666';
-  const SIZE = 40;
-  for (let y = 0; y < MAP.height; y += SIZE) {
-    for (let x = 0; x < MAP.width; x += 2*SIZE) {
-      MAP_CTX.fillRect(x - ((y/SIZE)%2)*SIZE, y, SIZE, SIZE);
-    }
+  MAP_CTX.clearRect(0, 0, MAP.width, MAP.height);
+  const drawOptions = {
+    roughness: 3,
+    bowing: 1,
+    stroke: '#fff',
+    fill: '#fff',
+    fillStyle: 'cross-hatch',
+    hachureGap: 10,
   }
+  roughCanvas = rough.canvas(MAP);
+  // sketch a tree
+  roughCanvas.circle(100, 100, 100, drawOptions);
+  roughCanvas.rectangle(90, 145, 20, 50, {...drawOptions, fillStyle: 'dashed', hachureAngle: 0});
 };
 
 // 0-255 -> 0-f
