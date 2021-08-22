@@ -3,10 +3,10 @@
 game feature
 ============
 - find a name for the game (don't put Space in it )
-- bullet explodes at destination
-  - leave a paint splat
-  - remove bullet from entities
-  - "splash" sound
+- [x] bullet explodes at destination
+  - [x] leave a paint splat
+  - [x] remove bullet from entities
+  - [x] "splash" sound
 - paint counter
   - decrease quickly when shooting
   - replenish slowly when not
@@ -46,6 +46,17 @@ alternate splats from vectezy
 
 boilerplate
 ===========
+- key/touch press/release should be recorded outside of hero, simpler to access
+  - moveLeft should be called leftKeyPressTime or whatever
+- could viewportOffsets be applied one time as a translation of the VIEWPORT/MAP canvas at render time, rather than pop up in all kind of places? 
+- find a cleaner way to order all the updates that need to happen
+  - input to velocity
+  - velocity to position
+  - position to adjusted position for collision response
+  - position to adjusted position to stay within map bounds (could that be done by collision or is that overkill?)
+  - camera window to viewport offsets
+  - updating animation/firing times and other counters <- oh good name, counters
+
 - lerp-smoothing?
 - gamepad support?
 - tinyfont.js? https://github.com/darkwebdev/tinyfont.js

@@ -69,15 +69,22 @@ const ATLAS = {
     ],
     speed: 100,
   },
-  foe: {
+  bullet: {
+    // FIXME doesn't apply to SVG
     'move': [
       { x: 0, y: 0, w: 16, h: 18 },
     ],
-    speed: 0,
+    speed: 400,
   },
 };
 const PATH_SPLASH = new Path2D('m-11.3 0.723s0 2.75-4.36 1.49c-4.88-1.41-3.89 8.01-0.389 7.3 3.5-0.707 5.45-4.87 5.76-1.57 0.311 3.3-4.05 5.97-4.05 5.97s-2.17 3.31 2.02 2.59c2.31-0.397 2.96-4.71 2.96-4.71 1.95-0.626 0.467 4 0.467 4 0.346 1.63 1.87-0.628 1.87-0.628 0.497-2.04 0.0232-3.48 1.63-3.22 1.95 1.05-0.517 1.24-0.623 5.97-0.0696 2.51 3.27 1.46 2.88-0.628-0.0411-2.84 0.194-4.07 2.8-4.08 5.32 1.81 0.438 3.37 4.82 6.36 4 1.48 6.97-2.56 4.51-9.11-0.714-2.41 3.54 0.536 5.84 2.91 1.42 1.09 4.2-0.888 1.56-2.12-3.55-1.05-5.44-1.78-6.3-3.53 0.658-2.09 3.86 1.27 5.99 2.36 2.88 0.942 7.82-3.29 1.32-7.22-2.94-1.48-5.61 2.15-6.77-1.65-0.699-4.62 4.23-5.21 7.24-6.44 0.418-1.34-0.199-1.81-1.01-2.12-1.74 0.476-3.23 2.5-4.36 2.04 0.39-0.79 1.26-1.19 0.7-2.75-0.458-1.72-2.13 0.196-1.71-0.707 0.574-3.96-2.43-4-3.27-1.81-1.13 3.73-1.66 2.4-2.41 2.91-2.48-2.08 3.03-5.02-1.4-11.5-1.98-1.75-7.81 0.634-6.77 3.61 1.09 3.78-0.747 4.11-2.02 5.1-3.81-0.288-5.05-2.18-6.3-4.32-3.07-2.3-1.48 1.33-1.48 1.33 3.02 1.7 5.29 4.4 5.29 4.4-1.94-0.755-4.12-0.222-2.1 1.65-4.17-2.85-6.07-0.236-2.57 0.864 1.61 0.218 1.38 1.05 1.17 1.88-1.92 1.71-2.39-0.029-4.12-0.628-1.34-0.209-2.16 0.778-0.623 1.57 1.19 0.0964 2.89 0.295 4.28 2.2-5.1 0.00198-2.86 2.48-0.467 2.2z');
+const PAINT_BULLET = new Path2D('m0.0686 3.36-0.961-4.46c-0.183-1.44 2.04-1.51 1.92 0z');
+const SOUND_SPLASH = [1.01,.5,195.9977,.01,.04,.06,,2.4,-6.7,.1,,,,,,,,.7,.07];
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
+const PAINT_RATE = 0.1; // in seconds, 10 shots per seconds
+const DISTANCE_TO_TARGET_RANGE = 5; // in pixel
+const GROUP_FOE = 1;
+const GROUP_FRIEND = 1;
 let tileset;   // characters sprite, embedded as a base64 encoded dataurl by build script
 
 // LOOP VARIABLES
@@ -94,26 +101,42 @@ function unlockExtraContent() {
   // NOTE: remember to update the value of the monetization meta tag in src/index.html to your payment pointer
 }
 
+
+function createEntity(type, group, x = 0, y = 0) {
+  const action = 'move';
+  const sprite = ATLAS[type][action][0];
+  return {
+    action,
+    frame: 0,
+    frameTime: 0,
+    group,
+    h: sprite.h,
+    moveDown: 0,
+    moveLeft: 0,
+    moveRight: 0,
+    moveUp: 0,
+    // coordinates in VIEWPORT space (MAP - VIEWPORT offset)
+    view: {},
+    velX: 0,
+    velY: 0,
+    speed: ATLAS[type].speed,
+    type,
+    w: sprite.w,
+    // coordinates in MAP space
+    x,
+    y,
+  };
+};
+
 function startGame() {
   // setRandSeed(getRandSeed());
   // if (isMonetizationEnabled()) { unlockExtraContent() }
   konamiIndex = 0;
   countdown = 60;
   viewportOffsetX = viewportOffsetY = 0;
-  hero = createEntity('hero', VIEWPORT.width / 2, VIEWPORT.height / 2);
+  hero = createEntity('hero', GROUP_FRIEND, VIEWPORT.width / 2, VIEWPORT.height / 2);
   entities = [
     hero,
-    // createEntity('foe', 10, 10),
-    // createEntity('foe', 630 - 16, 10),
-    // createEntity('foe', 630 - 16, 470 - 18),
-    // createEntity('foe', 300, 200),
-    // createEntity('foe', 400, 300),
-    // createEntity('foe', 500, 400),
-    // createEntity('foe', 10, 470 - 18),
-    // createEntity('foe', 100, 100),
-    // createEntity('foe', 100, 118),
-    // createEntity('foe', 116, 118),
-    // createEntity('foe', 116, 100),
   ];
   crosshair = {
     view: { x: hero.x, y: hero.y },
@@ -132,7 +155,8 @@ function testAABBCollision(entity1, entity2) {
     entity2MaxY: entity2.y + entity2.h,
   };
 
-  test.collide = entity1.x < test.entity2MaxX
+  test.collide = entity1.group !== entity2.group
+    && entity1.x < test.entity2MaxX
     && test.entity1MaxX > entity2.x
     && entity1.y < test.entity2MaxY
     && test.entity1MaxY > entity2.y;
@@ -250,31 +274,6 @@ function updateCrosshairMapPosition() {
   crosshair.y = Math.round(crosshair.view.y + viewportOffsetY);
 }
 
-function createEntity(type, x = 0, y = 0) {
-  const action = 'move';
-  const sprite = ATLAS[type][action][0];
-  return {
-    action,
-    frame: 0,
-    frameTime: 0,
-    h: sprite.h,
-    moveDown: 0,
-    moveLeft: 0,
-    moveRight: 0,
-    moveUp: 0,
-    // coordinates in VIEWPORT space (MAP - VIEWPORT offset)
-    view: {},
-    velX: 0,
-    velY: 0,
-    speed: ATLAS[type].speed,
-    type,
-    w: sprite.w,
-    // coordinates in MAP space
-    x,
-    y,
-  };
-};
-
 function updateHeroVelocity() {
   if (hero.moveLeft || hero.moveRight) {
     hero.velX = (hero.moveLeft > hero.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveLeft, hero.moveRight)) / TIME_TO_FULL_SPEED)
@@ -288,14 +287,27 @@ function updateHeroVelocity() {
   }
 }
 
+function updateEntity(entity) {
+  updateEntityPosition(entity);
+  updateEntityCounters(entity);
+}
+
 function updateEntityPosition(entity) {
-  // update position
   const ratio = entity.velX && entity.velY ? DIAGONAL_VELOCITY_DRAG : 1;
   const distance = entity.speed * elapsedTime * ratio;
   entity.x += distance * entity.velX;
   entity.y += distance * entity.velY;
+}
 
-  // TODO: this should be in its own function as it's sometime affected by the entity state (dead, dying, moving...)
+function velocityForTarget(srcX, srcY, destX, destY) {
+  const hypotenuse = Math.sqrt(Math.pow(destX - srcX, 2) + Math.pow(destY - srcY, 2))
+  const adjacent = destX - srcX;
+  const opposite = destY - srcY;
+  // [velX = cos(alpha), velY = sin(alpha)]
+  return [adjacent / hypotenuse, opposite / hypotenuse];
+}
+
+function updateEntityCounters(entity) {
   // update animation frame
   entity.frameTime += elapsedTime;
   if (entity.frameTime > FRAME_DURATION) {
@@ -303,23 +315,56 @@ function updateEntityPosition(entity) {
     entity.frame += 1;
     entity.frame %= ATLAS[entity.type][entity.action].length;
   }
+
+  // update painting rate
+  if (painting(entity)) {
+    entity.paintTime += elapsedTime;
+
+    if (entity.paintTime > PAINT_RATE) {
+      entity.paintTime -= PAINT_RATE;
+      // fire a new paint bullet
+      const x = entity.x;
+      const y = entity.y;
+      const [velX, velY] = velocityForTarget(x, y, crosshair.x, crosshair.y);
+      entities.push({
+        ...createEntity('bullet', GROUP_FRIEND, x, y),
+        velX,
+        velY,
+        destX: crosshair.x,
+        destY: crosshair.y
+      })
+    }
+  }
+
+  if (entity.type === 'bullet') {
+    const distanceToDestination = Math.sqrt(Math.pow(entity.destX - entity.x, 2) + Math.pow(entity.destY - entity.y, 2));
+    if (distanceToDestination <= DISTANCE_TO_TARGET_RANGE) {
+      // mark bullet for deletion
+      entity.dead = true;
+      // paint
+      paintSplash(entity.destX, entity.destY);
+      // sound
+      playSound(SOUND_SPLASH);
+    }
+  }
 };
 
-function painting() {
-  return hero.paintTime || crosshair.paintTime;
+// TODO will break down if entity is not hero, as crosshair applies to hero only
+function painting(entity) {
+  return entity.painting || crosshair.painting;
 }
 
-function paintSplash() {
+function paintSplash(x, y) {
   hue = (hue + 1) % 360;
   PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
   const sw = rand(0.9, 1.1);
   const sh = rand(0.9, 1.1);
   const angle = rand(0, 6.28);  // in radian
-  // apply some random rotation and scaling
   PAINT_CTX.save();
+  // apply some random rotation and scaling
   PAINT_CTX.transform(
     sw, 0, 0, sh,
-    crosshair.x, crosshair.y
+    x, y
   );
   PAINT_CTX.rotate(angle)
   PAINT_CTX.fill(PATH_SPLASH);
@@ -334,7 +379,7 @@ function update() {
         screen = END_SCREEN;
       }
       updateHeroVelocity();
-      entities.forEach(updateEntityPosition);
+      entities.forEach(updateEntity);
       entities.slice(1).forEach((entity) => {
         const test = testAABBCollision(hero, entity);
         if (test.collide) {
@@ -345,10 +390,8 @@ function update() {
       updateCameraWindow();
       entities.forEach(updateEntityViewportPosition);
       updateCrosshairMapPosition();
-      if (painting()) {
-        paintSplash();
-      }
       bluePercentage = countColors();
+      entities = entities.filter(entity => !entity.dead);
       break;
   }
 };
@@ -413,11 +456,10 @@ function render() {
 };
 
 function renderCrosshair() {
-  VIEWPORT_CTX.strokeStyle = painting() ? '#000' : '#fff';
+  VIEWPORT_CTX.strokeStyle = painting(hero) ? '#000' : '#fff';
   VIEWPORT_CTX.lineWidth = 2;
   VIEWPORT_CTX.strokeRect(crosshair.view.x - 1, crosshair.view.y - 1, 2, 2);
   VIEWPORT_CTX.strokeRect(crosshair.view.x - 6, crosshair.view.y - 6, 12, 12);
-
 }
 
 function renderCountdown() {
@@ -433,8 +475,16 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
   ctx.drawImage(
     tileset,
     sprite.x, sprite.y, sprite.w, sprite.h,
+    // entity.view.x - entity.w / 2, entity.view.y - entity.h / 2, sprite.w, sprite.h
     entity.view.x, entity.view.y, sprite.w, sprite.h
   );
+  // DEBUG
+  // ctx.strokeStyle = '#f0f';
+  // ctx.strokeRect(entity.view.x, entity.view.y, sprite.w, sprite.h);
+  // if (entity.type === 'bullet') {
+  //   ctx.strokeStyle = '#0f0';
+  //   ctx.strokeRect(entity.destX, entity.destY, 2, 2);
+  // }
 };
 
 function renderMap() {
@@ -568,7 +618,10 @@ onkeydown = function(e) {
             hero.moveDown = currentTime;
             break;
           case 'Space':
-            hero.paintTime = currentTime;
+            hero.painting = currentTime;
+            // preserve paintTime if mouse button was pressed first,
+            // initialize to PAINT_RATE if not to fire immediately
+            hero.paintTime = hero.paintTime || PAINT_RATE * 1.1;
             break;
           case 'KeyP':
             // Pause game as soon as key is pressed
@@ -626,7 +679,7 @@ onkeyup = function(e) {
           hero.moveDown = 0;
           break;
         case 'Space':
-          hero.paintTime = 0;
+          hero.painting = 0;
           break;
         }
       break;
@@ -652,7 +705,10 @@ onpointerdown = function(e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
-      crosshair.paintTime = currentTime;
+      crosshair.painting = currentTime;
+      // preserve paintTime if Space key was pressed first,
+      // initialize to PAINT_RATE if not to fire immediately
+      hero.paintTime = hero.paintTime || PAINT_RATE * 1.1;
       break;
   }
 };
@@ -675,7 +731,7 @@ onpointerup = function(e) {
       startGame();
       break;
     case GAME_SCREEN:
-      crosshair.paintTime = 0;
+      crosshair.painting = 0;
       break;
     case END_SCREEN:
       screen = TITLE_SCREEN;
