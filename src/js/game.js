@@ -4,7 +4,7 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { clamp, getRandSeed, setRandSeed, lerp, loadImg, randInt } from './utils';
+import { clamp, getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
 import TILESET from '../img/tileset.webp';
 
 
@@ -76,6 +76,7 @@ const ATLAS = {
     speed: 0,
   },
 };
+const PATH_SPLASH = new Path2D('m-11.3 0.723s0 2.75-4.36 1.49c-4.88-1.41-3.89 8.01-0.389 7.3 3.5-0.707 5.45-4.87 5.76-1.57 0.311 3.3-4.05 5.97-4.05 5.97s-2.17 3.31 2.02 2.59c2.31-0.397 2.96-4.71 2.96-4.71 1.95-0.626 0.467 4 0.467 4 0.346 1.63 1.87-0.628 1.87-0.628 0.497-2.04 0.0232-3.48 1.63-3.22 1.95 1.05-0.517 1.24-0.623 5.97-0.0696 2.51 3.27 1.46 2.88-0.628-0.0411-2.84 0.194-4.07 2.8-4.08 5.32 1.81 0.438 3.37 4.82 6.36 4 1.48 6.97-2.56 4.51-9.11-0.714-2.41 3.54 0.536 5.84 2.91 1.42 1.09 4.2-0.888 1.56-2.12-3.55-1.05-5.44-1.78-6.3-3.53 0.658-2.09 3.86 1.27 5.99 2.36 2.88 0.942 7.82-3.29 1.32-7.22-2.94-1.48-5.61 2.15-6.77-1.65-0.699-4.62 4.23-5.21 7.24-6.44 0.418-1.34-0.199-1.81-1.01-2.12-1.74 0.476-3.23 2.5-4.36 2.04 0.39-0.79 1.26-1.19 0.7-2.75-0.458-1.72-2.13 0.196-1.71-0.707 0.574-3.96-2.43-4-3.27-1.81-1.13 3.73-1.66 2.4-2.41 2.91-2.48-2.08 3.03-5.02-1.4-11.5-1.98-1.75-7.81 0.634-6.77 3.61 1.09 3.78-0.747 4.11-2.02 5.1-3.81-0.288-5.05-2.18-6.3-4.32-3.07-2.3-1.48 1.33-1.48 1.33 3.02 1.7 5.29 4.4 5.29 4.4-1.94-0.755-4.12-0.222-2.1 1.65-4.17-2.85-6.07-0.236-2.57 0.864 1.61 0.218 1.38 1.05 1.17 1.88-1.92 1.71-2.39-0.029-4.12-0.628-1.34-0.209-2.16 0.778-0.623 1.57 1.19 0.0964 2.89 0.295 4.28 2.2-5.1 0.00198-2.86 2.48-0.467 2.2z');
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
 let tileset;   // characters sprite, embedded as a base64 encoded dataurl by build script
 
@@ -311,11 +312,18 @@ function painting() {
 function paintSplash() {
   hue = (hue + 1) % 360;
   PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
-  const offsetX = randInt(-10, 10);
-  const offsetY = randInt(-10, 10);
-  const width = randInt(5, 20);
-  const height = randInt(5, 20);
-  PAINT_CTX.fillRect(crosshair.x + offsetX, crosshair.y + offsetY, width, height);
+  const sw = rand(0.9, 1.1);
+  const sh = rand(0.9, 1.1);
+  const angle = rand(0, 6.28);  // in radian
+  // apply some random rotation and scaling
+  PAINT_CTX.save();
+  PAINT_CTX.transform(
+    sw, 0, 0, sh,
+    crosshair.x, crosshair.y
+  );
+  PAINT_CTX.rotate(angle)
+  PAINT_CTX.fill(PATH_SPLASH);
+  PAINT_CTX.restore();
 }
 
 function update() {
