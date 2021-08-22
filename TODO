@@ -1,6 +1,50 @@
 - add CCapture.js for recording in-progress movies during development
 
-game engine
+game feature
+============
+- find a name for the game (don't put Space in it )
+- bullet explodes at destination
+  - leave a paint splat
+  - remove bullet from entities
+  - "splash" sound
+- paint counter
+  - decrease quickly when shooting
+  - replenish slowly when not
+  - render counter on screens
+- render territory capture visually (2 colors from a set of predefined colors)
+- win/loose screen (with stats of % captured)
+  - font -> "impact" instead of bitmap
+  - game duration (currently 60s)
+- bots
+  - move toward unpainted/enemy painted territory
+  - fire to paint
+  - fire to hurt player or bots
+- hit by paint... HP? or paint counter?
+- level
+  - obstacles
+  - ramps/different heights?
+- special modes
+  - replenish paint faster on owned territory
+  - squid mode: move faster on owned territory (or is that replenish?)
+- music during match
+- music during title screens and end screens
+- other weapons
+  - weapon selection screen (or is that in game?)
+  - paint brush (melee weapon, large splat)
+  - sniper gun (low cadence, fast speed, high damage/paint splat)
+- konami code for what?
+- Coil for what?
+- multiplayer / server category (unlikely...)
+  - means lobby to find games
+  - player names
+  - central logic (% captured currently canvas based aka client side)
+
+
+https://shrinkme.app/?s=e <- optimize SVG paths even further
+alternate splats from vectezy
+<a href="https://www.vecteezy.com/free-vector/paint-splatter">Paint Splatter Vectors by Vecteezy</a>
+
+boilerplate
 ===========
 - lerp-smoothing?
 - gamepad support?
