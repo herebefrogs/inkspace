@@ -49,8 +49,8 @@
      id="layer4"
      inkscape:label="Paint projectile">
     <path
-       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 0.06862292,3.3625231 -0.96072089,-4.4604898 c -0.18299443,-1.4410813 2.03581327,-1.5097042 1.92144177,0 z"
+       style="fill:none;stroke:#000000;stroke-width:0.492833px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 0.19704946,8.2793436 -1.5924655,-0.0291187 c -0.3408599,-2.6842725 3.7920674,-2.812095 3.5790299,0 z"
        id="paint_projectile"
        sodipodi:nodetypes="cccc" />
   </g>

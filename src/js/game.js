@@ -5,7 +5,6 @@ import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
 import { clamp, getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
-import TILESET from '../img/tileset.webp';
 
 
 const konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
@@ -60,32 +59,29 @@ let hue = 0;
 
 const ATLAS = {
   hero: {
-    move: [
-      { x: 0, y: 0, w: 16, h: 18 },
-      { x: 16, y: 0, w: 16, h: 18 },
-      { x: 32, y: 0, w: 16, h: 18 },
-      { x: 48, y: 0, w: 16, h: 18 },
-      { x: 64, y: 0, w: 16, h: 18 },
-    ],
+    color: '#f0f',
+    path: new Path2D('M-5 -5l10 0l0 10l-10 0Z'),
     speed: 100,
+    w: 10,
+    h: 10
   },
   bullet: {
-    // FIXME doesn't apply to SVG
-    'move': [
-      { x: 0, y: 0, w: 16, h: 18 },
-    ],
+    path: new Path2D('m0.197 8.28-1.79-8.31c-0.341-2.68 3.79-2.81 3.58 0z'),
     speed: 400,
+    // from Inkscape
+    w: 9,
+    h: 22
   },
+  splash: {
+    path: new Path2D('m-11.3 0.723s0 2.75-4.36 1.49c-4.88-1.41-3.89 8.01-0.389 7.3 3.5-0.707 5.45-4.87 5.76-1.57 0.311 3.3-4.05 5.97-4.05 5.97s-2.17 3.31 2.02 2.59c2.31-0.397 2.96-4.71 2.96-4.71 1.95-0.626 0.467 4 0.467 4 0.346 1.63 1.87-0.628 1.87-0.628 0.497-2.04 0.0232-3.48 1.63-3.22 1.95 1.05-0.517 1.24-0.623 5.97-0.0696 2.51 3.27 1.46 2.88-0.628-0.0411-2.84 0.194-4.07 2.8-4.08 5.32 1.81 0.438 3.37 4.82 6.36 4 1.48 6.97-2.56 4.51-9.11-0.714-2.41 3.54 0.536 5.84 2.91 1.42 1.09 4.2-0.888 1.56-2.12-3.55-1.05-5.44-1.78-6.3-3.53 0.658-2.09 3.86 1.27 5.99 2.36 2.88 0.942 7.82-3.29 1.32-7.22-2.94-1.48-5.61 2.15-6.77-1.65-0.699-4.62 4.23-5.21 7.24-6.44 0.418-1.34-0.199-1.81-1.01-2.12-1.74 0.476-3.23 2.5-4.36 2.04 0.39-0.79 1.26-1.19 0.7-2.75-0.458-1.72-2.13 0.196-1.71-0.707 0.574-3.96-2.43-4-3.27-1.81-1.13 3.73-1.66 2.4-2.41 2.91-2.48-2.08 3.03-5.02-1.4-11.5-1.98-1.75-7.81 0.634-6.77 3.61 1.09 3.78-0.747 4.11-2.02 5.1-3.81-0.288-5.05-2.18-6.3-4.32-3.07-2.3-1.48 1.33-1.48 1.33 3.02 1.7 5.29 4.4 5.29 4.4-1.94-0.755-4.12-0.222-2.1 1.65-4.17-2.85-6.07-0.236-2.57 0.864 1.61 0.218 1.38 1.05 1.17 1.88-1.92 1.71-2.39-0.029-4.12-0.628-1.34-0.209-2.16 0.778-0.623 1.57 1.19 0.0964 2.89 0.295 4.28 2.2-5.1 0.00198-2.86 2.48-0.467 2.2z'),
+    sound: [1.01,.5,195.9977,.01,.04,.06,,2.4,-6.7,.1,,,,,,,,.7,.07]
+  }
 };
-const PATH_SPLASH = new Path2D('m-11.3 0.723s0 2.75-4.36 1.49c-4.88-1.41-3.89 8.01-0.389 7.3 3.5-0.707 5.45-4.87 5.76-1.57 0.311 3.3-4.05 5.97-4.05 5.97s-2.17 3.31 2.02 2.59c2.31-0.397 2.96-4.71 2.96-4.71 1.95-0.626 0.467 4 0.467 4 0.346 1.63 1.87-0.628 1.87-0.628 0.497-2.04 0.0232-3.48 1.63-3.22 1.95 1.05-0.517 1.24-0.623 5.97-0.0696 2.51 3.27 1.46 2.88-0.628-0.0411-2.84 0.194-4.07 2.8-4.08 5.32 1.81 0.438 3.37 4.82 6.36 4 1.48 6.97-2.56 4.51-9.11-0.714-2.41 3.54 0.536 5.84 2.91 1.42 1.09 4.2-0.888 1.56-2.12-3.55-1.05-5.44-1.78-6.3-3.53 0.658-2.09 3.86 1.27 5.99 2.36 2.88 0.942 7.82-3.29 1.32-7.22-2.94-1.48-5.61 2.15-6.77-1.65-0.699-4.62 4.23-5.21 7.24-6.44 0.418-1.34-0.199-1.81-1.01-2.12-1.74 0.476-3.23 2.5-4.36 2.04 0.39-0.79 1.26-1.19 0.7-2.75-0.458-1.72-2.13 0.196-1.71-0.707 0.574-3.96-2.43-4-3.27-1.81-1.13 3.73-1.66 2.4-2.41 2.91-2.48-2.08 3.03-5.02-1.4-11.5-1.98-1.75-7.81 0.634-6.77 3.61 1.09 3.78-0.747 4.11-2.02 5.1-3.81-0.288-5.05-2.18-6.3-4.32-3.07-2.3-1.48 1.33-1.48 1.33 3.02 1.7 5.29 4.4 5.29 4.4-1.94-0.755-4.12-0.222-2.1 1.65-4.17-2.85-6.07-0.236-2.57 0.864 1.61 0.218 1.38 1.05 1.17 1.88-1.92 1.71-2.39-0.029-4.12-0.628-1.34-0.209-2.16 0.778-0.623 1.57 1.19 0.0964 2.89 0.295 4.28 2.2-5.1 0.00198-2.86 2.48-0.467 2.2z');
-const PAINT_BULLET = new Path2D('m0.0686 3.36-0.961-4.46c-0.183-1.44 2.04-1.51 1.92 0z');
-const SOUND_SPLASH = [1.01,.5,195.9977,.01,.04,.06,,2.4,-6.7,.1,,,,,,,,.7,.07];
-const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
+
 const PAINT_RATE = 0.1; // in seconds, 10 shots per seconds
 const DISTANCE_TO_TARGET_RANGE = 5; // in pixel
 const GROUP_FOE = 1;
 const GROUP_FRIEND = 1;
-let tileset;   // characters sprite, embedded as a base64 encoded dataurl by build script
 
 // LOOP VARIABLES
 
@@ -103,25 +99,19 @@ function unlockExtraContent() {
 
 
 function createEntity(type, group, x = 0, y = 0) {
-  const action = 'move';
-  const sprite = ATLAS[type][action][0];
+  const cfg = ATLAS[type];
   return {
-    action,
-    frame: 0,
-    frameTime: 0,
+    ...cfg,
     group,
-    h: sprite.h,
     moveDown: 0,
     moveLeft: 0,
     moveRight: 0,
     moveUp: 0,
-    // coordinates in VIEWPORT space (MAP - VIEWPORT offset)
-    view: {},
+    type,
     velX: 0,
     velY: 0,
-    speed: ATLAS[type].speed,
-    type,
-    w: sprite.w,
+    // coordinates in VIEWPORT space (MAP - VIEWPORT offset)
+    view: {},
     // coordinates in MAP space
     x,
     y,
@@ -303,19 +293,19 @@ function velocityForTarget(srcX, srcY, destX, destY) {
   const hypotenuse = Math.sqrt(Math.pow(destX - srcX, 2) + Math.pow(destY - srcY, 2))
   const adjacent = destX - srcX;
   const opposite = destY - srcY;
-  // [velX = cos(alpha), velY = sin(alpha)]
-  return [adjacent / hypotenuse, opposite / hypotenuse];
+  // [
+  //  velX = cos(alpha),
+  //  velY = sin(alpha),
+  //  alpha
+  // ]
+  return [
+    adjacent / hypotenuse,
+    opposite / hypotenuse,
+    Math.atan2(opposite / hypotenuse, adjacent / hypotenuse) - 1.5*Math.PI,
+  ];
 }
 
 function updateEntityCounters(entity) {
-  // update animation frame
-  entity.frameTime += elapsedTime;
-  if (entity.frameTime > FRAME_DURATION) {
-    entity.frameTime -= FRAME_DURATION;
-    entity.frame += 1;
-    entity.frame %= ATLAS[entity.type][entity.action].length;
-  }
-
   // update painting rate
   if (painting(entity)) {
     entity.paintTime += elapsedTime;
@@ -325,9 +315,12 @@ function updateEntityCounters(entity) {
       // fire a new paint bullet
       const x = entity.x;
       const y = entity.y;
-      const [velX, velY] = velocityForTarget(x, y, crosshair.x, crosshair.y);
+      const [velX, velY, angle] = velocityForTarget(x, y, crosshair.x, crosshair.y);
+      hue = (hue + 1) % 360;
       entities.push({
         ...createEntity('bullet', GROUP_FRIEND, x, y),
+        angle,
+        color: `hsl(${hue} 90% 50%)`,
         velX,
         velY,
         destX: crosshair.x,
@@ -344,7 +337,7 @@ function updateEntityCounters(entity) {
       // paint
       paintSplash(entity.destX, entity.destY);
       // sound
-      playSound(SOUND_SPLASH);
+      playSound(ATLAS.splash.sound);
     }
   }
 };
@@ -355,7 +348,6 @@ function painting(entity) {
 }
 
 function paintSplash(x, y) {
-  hue = (hue + 1) % 360;
   PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
   const sw = rand(0.9, 1.1);
   const sh = rand(0.9, 1.1);
@@ -367,7 +359,7 @@ function paintSplash(x, y) {
     x, y
   );
   PAINT_CTX.rotate(angle)
-  PAINT_CTX.fill(PATH_SPLASH);
+  /PAINT_CTX.fill(ATLAS.splash.path);
   PAINT_CTX.restore();
 }
 
@@ -391,6 +383,7 @@ function update() {
       entities.forEach(updateEntityViewportPosition);
       updateCrosshairMapPosition();
       bluePercentage = countColors();
+      // FIXME some bullets miss the target? and survive
       entities = entities.filter(entity => !entity.dead);
       break;
   }
@@ -470,17 +463,16 @@ function renderCountdown() {
 };
 
 function renderEntity(entity, ctx = VIEWPORT_CTX) {
-  const sprite = ATLAS[entity.type][entity.action][entity.frame];
-  // TODO skip draw if image outside of visible canvas
-  ctx.drawImage(
-    tileset,
-    sprite.x, sprite.y, sprite.w, sprite.h,
-    // entity.view.x - entity.w / 2, entity.view.y - entity.h / 2, sprite.w, sprite.h
-    entity.view.x, entity.view.y, sprite.w, sprite.h
-  );
+  console.log(entity.angle);
+  ctx.save();
+  ctx.fillStyle = entity.color;
+  ctx.translate(entity.view.x, entity.view.y);
+  ctx.rotate(entity.angle);
+  ctx.fill(entity.path);
+  ctx.restore();
   // DEBUG
   // ctx.strokeStyle = '#f0f';
-  // ctx.strokeRect(entity.view.x, entity.view.y, sprite.w, sprite.h);
+  // ctx.strokeRect(entity.view.x, entity.view.y, entity.w, entity.h);
   // if (entity.type === 'bullet') {
   //   ctx.strokeStyle = '#0f0';
   //   ctx.strokeRect(entity.destX, entity.destY, 2, 2);
@@ -563,8 +555,6 @@ onload = async (e) => {
   //checkMonetization();
 
   await initCharset(VIEWPORT_CTX);
-  tileset = await loadImg(TILESET);
-  // speak = await initSpeech();
 
   toggleLoop(true);
 };
