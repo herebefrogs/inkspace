@@ -485,8 +485,16 @@ function renderCrosshair() {
 }
 
 function renderPaintAmno() {
-  // temp
-  renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
+  VIEWPORT_CTX.strokeStyle = '#000';
+  VIEWPORT_CTX.lineWidth = 2;
+  VIEWPORT_CTX.strokeRect(
+    CHARSET_SIZE - 1, VIEWPORT.height - CHARSET_SIZE - Math.floor(MAX_AMNO/3) - 1,
+    2*CHARSET_SIZE + 2, Math.floor(MAX_AMNO/3) + 2
+  );
+    VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+    VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - hero.paintAmno/3, 2*CHARSET_SIZE, hero.paintAmno/3);
+
+  // renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
 };
 
 function renderCountdown() {
