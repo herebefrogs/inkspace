@@ -78,6 +78,8 @@ const ATLAS = {
   }
 };
 
+const MAX_AMNO = 100;
+const AMNO_REPLENISH_TIME = 1; // in seconds
 const PAINT_RATE = 0.1; // in seconds, 10 shots per seconds
 const DISTANCE_TO_TARGET_RANGE = 5; // in pixel
 const GROUP_FOE = 1;
@@ -124,7 +126,11 @@ function startGame() {
   konamiIndex = 0;
   countdown = 60;
   viewportOffsetX = viewportOffsetY = 0;
-  hero = createEntity('hero', GROUP_FRIEND, VIEWPORT.width / 2, VIEWPORT.height / 2);
+  hero = {
+    ...createEntity('hero', GROUP_FRIEND, VIEWPORT.width / 2, VIEWPORT.height / 2),
+    paintAmno: MAX_AMNO,
+    amnoReplenishTime: 0,
+  };
   entities = [
     hero,
   ];
@@ -277,11 +283,6 @@ function updateHeroVelocity() {
   }
 }
 
-function updateEntity(entity) {
-  updateEntityPosition(entity);
-  updateEntityCounters(entity);
-}
-
 function updateEntityPosition(entity) {
   const ratio = entity.velX && entity.velY ? DIAGONAL_VELOCITY_DRAG : 1;
   const distance = entity.speed * elapsedTime * ratio;
@@ -301,52 +302,32 @@ function velocityForTarget(srcX, srcY, destX, destY) {
   return [
     adjacent / hypotenuse,
     opposite / hypotenuse,
-    Math.atan2(opposite / hypotenuse, adjacent / hypotenuse) - 1.5*Math.PI,
+    Math.atan2(opposite / hypotenuse, adjacent / hypotenuse) + Math.PI/2,
   ];
 }
 
-function updateEntityCounters(entity) {
-  // update painting rate
-  if (painting(entity)) {
-    entity.paintTime += elapsedTime;
-
-    if (entity.paintTime > PAINT_RATE) {
-      entity.paintTime -= PAINT_RATE;
-      // fire a new paint bullet
-      const x = entity.x;
-      const y = entity.y;
-      const [velX, velY, angle] = velocityForTarget(x, y, crosshair.x, crosshair.y);
-      hue = (hue + 1) % 360;
-      entities.push({
-        ...createEntity('bullet', GROUP_FRIEND, x, y),
-        angle,
-        color: `hsl(${hue} 90% 50%)`,
-        velX,
-        velY,
-        destX: crosshair.x,
-        destY: crosshair.y
-      })
-    }
-  }
-
-  if (entity.type === 'bullet') {
-    const distanceToDestination = Math.sqrt(Math.pow(entity.destX - entity.x, 2) + Math.pow(entity.destY - entity.y, 2));
-    if (distanceToDestination <= DISTANCE_TO_TARGET_RANGE) {
-      // mark bullet for deletion
-      entity.dead = true;
-      // paint
-      paintSplash(entity.destX, entity.destY);
-      // sound
-      playSound(ATLAS.splash.sound);
-    }
-  }
-};
+function firePaintBullet(entity) {
+  const x = entity.x;
+  const y = entity.y;
+  const [velX, velY, angle] = velocityForTarget(x, y, crosshair.x, crosshair.y);
+  hue = (hue + 1) % 360;
+  entities.push({
+    ...createEntity('bullet', entity.group, x, y),
+    angle,
+    color: `hsl(${hue} 90% 50%)`,
+    velX,
+    velY,
+    destX: crosshair.x,
+    destY: crosshair.y
+  })
+}
 
 // TODO will break down if entity is not hero, as crosshair applies to hero only
 function painting(entity) {
   return entity.painting || crosshair.painting;
 }
 
+// TODO splash could be animated to quickly scale to final size
 function paintSplash(x, y) {
   PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
   const sw = rand(0.9, 1.1);
@@ -358,15 +339,63 @@ function paintSplash(x, y) {
     sw, 0, 0, sh,
     x, y
   );
-  PAINT_CTX.rotate(angle)
-  /PAINT_CTX.fill(ATLAS.splash.path);
+  PAINT_CTX.rotate(angle);
+  PAINT_CTX.fill(ATLAS.splash.path);
   PAINT_CTX.restore();
+}
+
+function withinDestinationRange(entity) {
+  return Math.sqrt(Math.pow(entity.destX - entity.x, 2) + Math.pow(entity.destY - entity.y, 2)) <= DISTANCE_TO_TARGET_RANGE;
+}
+
+function replenishRate() {
+  return AMNO_REPLENISH_TIME;
+}
+
+function updateEntityCounters(entity) {
+  switch (entity.type) {
+    case 'hero':
+      // update amno replenish rate
+      entity.amnoReplenishTime += elapsedTime;
+      const rate = replenishRate();
+      if (entity.amnoReplenishTime > rate) {
+        entity.paintAmno = Math.min(entity.paintAmno + Math.floor(entity.amnoReplenishTime / rate), MAX_AMNO)
+        entity.amnoReplenishTime %= rate;
+      }
+
+      // update painting rate
+      if (painting(entity)) {
+        entity.paintTime += elapsedTime;
+
+        if (entity.paintAmno && entity.paintTime > PAINT_RATE) {
+          entity.paintTime %= PAINT_RATE;
+          entity.paintAmno -= 1;
+          firePaintBullet(entity);
+        }
+      }
+      break;
+    case 'bullet':
+      if (withinDestinationRange(entity)) {
+        // mark bullet for deletion
+        entity.dead = true;
+        // paint
+        paintSplash(entity.destX, entity.destY);
+        // sound
+        playSound(ATLAS.splash.sound);
+      }
+      break;
+  }
+};
+
+function updateEntity(entity) {
+  updateEntityPosition(entity);
+  updateEntityCounters(entity);
 }
 
 function update() {
   switch (screen) {
     case GAME_SCREEN:
-      // countdown -= elapsedTime;
+      countdown -= elapsedTime;
       if (countdown < 0) {
         screen = END_SCREEN;
       }
@@ -433,11 +462,11 @@ function render() {
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
-      renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
-      //renderCountdown();
-      renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       entities.forEach(entity => renderEntity(entity));
+      renderCountdown();
+      renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       renderCrosshair();
+      renderPaintAmno();
       break;
     case END_SCREEN:
       renderText('end screen', CHARSET_SIZE, CHARSET_SIZE);
@@ -455,15 +484,19 @@ function renderCrosshair() {
   VIEWPORT_CTX.strokeRect(crosshair.view.x - 6, crosshair.view.y - 6, 12, 12);
 }
 
+function renderPaintAmno() {
+  // temp
+  renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
+};
+
 function renderCountdown() {
   const minutes = Math.floor(Math.ceil(countdown) / 60);
   const seconds = Math.ceil(countdown) - minutes * 60;
-  renderText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+  renderText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, CHARSET_SIZE, CHARSET_SIZE);
 
 };
 
 function renderEntity(entity, ctx = VIEWPORT_CTX) {
-  console.log(entity.angle);
   ctx.save();
   ctx.fillStyle = entity.color;
   ctx.translate(entity.view.x, entity.view.y);

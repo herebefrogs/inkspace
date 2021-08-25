@@ -8,8 +8,8 @@ game feature
   - [x] remove bullet from entities
   - [x] "splash" sound
 - paint counter
-  - decrease quickly when shooting
-  - replenish slowly when not
+  - [x] decrease quickly when shooting
+  - [x] replenish slowly when not
   - render counter on screens
 - render territory capture visually (2 colors from a set of predefined colors)
 - win/loose screen (with stats of % captured)
