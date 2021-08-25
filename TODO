@@ -10,8 +10,8 @@ game feature
 - paint counter
   - [x] decrease quickly when shooting
   - [x] replenish slowly when not
-  - render counter on screens
-- render territory capture visually (2 colors from a set of predefined colors)
+  - [x] render counter on screens
+- [x] render territory capture visually (2 colors from a set of predefined colors)
 - win/loose screen (with stats of % captured)
   - font -> "impact" instead of bitmap
   - game duration (currently 60s)

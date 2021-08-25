@@ -463,9 +463,9 @@ function render() {
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
       entities.forEach(entity => renderEntity(entity));
-      renderCountdown();
-      renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       renderCrosshair();
+      renderCountdown();
+      renderSpaceCaptured();
       renderPaintAmno();
       break;
     case END_SCREEN:
@@ -484,6 +484,21 @@ function renderCrosshair() {
   VIEWPORT_CTX.strokeRect(crosshair.view.x - 6, crosshair.view.y - 6, 12, 12);
 }
 
+function renderSpaceCaptured() {
+  VIEWPORT_CTX.strokeStyle = '#000';
+  VIEWPORT_CTX.lineWidth = 2;
+  VIEWPORT_CTX.strokeRect(
+    VIEWPORT.width - 100 - CHARSET_SIZE - 1, CHARSET_SIZE - 1,
+    100 + 2, CHARSET_SIZE + 2
+  );
+  VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+  VIEWPORT_CTX.fillRect(
+    VIEWPORT.width - (bluePercentage || 0) - CHARSET_SIZE, CHARSET_SIZE,
+    (bluePercentage || 0), CHARSET_SIZE
+  );
+  //renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+}
+
 function renderPaintAmno() {
   VIEWPORT_CTX.strokeStyle = '#000';
   VIEWPORT_CTX.lineWidth = 2;
@@ -491,8 +506,8 @@ function renderPaintAmno() {
     CHARSET_SIZE - 1, VIEWPORT.height - CHARSET_SIZE - Math.floor(MAX_AMNO/3) - 1,
     2*CHARSET_SIZE + 2, Math.floor(MAX_AMNO/3) + 2
   );
-    VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
-    VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - hero.paintAmno/3, 2*CHARSET_SIZE, hero.paintAmno/3);
+  VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+  VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - hero.paintAmno/3, 2*CHARSET_SIZE, hero.paintAmno/3);
 
   // renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
 };
