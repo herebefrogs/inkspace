@@ -4,7 +4,7 @@ import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
-import { clamp, getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
+import { choice, clamp, getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
 
 
 const konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
@@ -27,6 +27,8 @@ let countdown; // in seconds
 let hero;
 let crosshair; // coordinate in viewport space (add viewportOffset to convert to map space)
 let entities;
+let spaceCaptured;
+let colorSet;
 
 let speak;
 
@@ -54,8 +56,11 @@ let canvasX;
 let scaleToFit;
 
 const BLUE_PAINT = '#00a';
-let bluePercentage = 0;
-let hue = 0;
+const COLOR_SETS = [
+  { homeTeam: '#0b6', visitors: '#b08', neutral: '#ab0' },
+  { homeTeam: '#61b', visitors: '#1b7', neutral: '#d47' },
+  { homeTeam: '#bc0', visitors: '#81a', neutral: '#b09' }
+]
 
 const ATLAS = {
   hero: {
@@ -125,6 +130,7 @@ function startGame() {
   // if (isMonetizationEnabled()) { unlockExtraContent() }
   konamiIndex = 0;
   countdown = 60;
+  colorSet = choice(COLOR_SETS);
   viewportOffsetX = viewportOffsetY = 0;
   hero = {
     ...createEntity('hero', GROUP_FRIEND, VIEWPORT.width / 2, VIEWPORT.height / 2),
@@ -310,11 +316,10 @@ function firePaintBullet(entity) {
   const x = entity.x;
   const y = entity.y;
   const [velX, velY, angle] = velocityForTarget(x, y, crosshair.x, crosshair.y);
-  hue = (hue + 1) % 360;
   entities.push({
     ...createEntity('bullet', entity.group, x, y),
     angle,
-    color: `hsl(${hue} 90% 50%)`,
+    color: entity.type === 'hero' ? colorSet.homeTeam : colorSet.visitors,
     velX,
     velY,
     destX: crosshair.x,
@@ -328,8 +333,8 @@ function painting(entity) {
 }
 
 // TODO splash could be animated to quickly scale to final size
-function paintSplash(x, y) {
-  PAINT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+function paintSplash(x, y, color) {
+  PAINT_CTX.fillStyle = color;
   const sw = rand(0.9, 1.1);
   const sh = rand(0.9, 1.1);
   const angle = rand(0, 6.28);  // in radian
@@ -379,7 +384,7 @@ function updateEntityCounters(entity) {
         // mark bullet for deletion
         entity.dead = true;
         // paint
-        paintSplash(entity.destX, entity.destY);
+        paintSplash(entity.destX, entity.destY, entity.color);
         // sound
         playSound(ATLAS.splash.sound);
       }
@@ -411,7 +416,7 @@ function update() {
       updateCameraWindow();
       entities.forEach(updateEntityViewportPosition);
       updateCrosshairMapPosition();
-      bluePercentage = countColors();
+      spaceCaptured = countColors();
       // FIXME some bullets miss the target? and survive
       entities = entities.filter(entity => !entity.dead);
       break;
@@ -491,10 +496,20 @@ function renderSpaceCaptured() {
     VIEWPORT.width - 100 - CHARSET_SIZE - 1, CHARSET_SIZE - 1,
     100 + 2, CHARSET_SIZE + 2
   );
-  VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+  VIEWPORT_CTX.fillStyle = colorSet.neutral;
   VIEWPORT_CTX.fillRect(
-    VIEWPORT.width - (bluePercentage || 0) - CHARSET_SIZE, CHARSET_SIZE,
-    (bluePercentage || 0), CHARSET_SIZE
+    VIEWPORT.width - 100 - CHARSET_SIZE, CHARSET_SIZE,
+    100, CHARSET_SIZE
+  );
+  VIEWPORT_CTX.fillStyle = colorSet.homeTeam;
+  VIEWPORT_CTX.fillRect(
+    VIEWPORT.width - spaceCaptured.homeTeam - CHARSET_SIZE, CHARSET_SIZE,
+    spaceCaptured.homeTeam, CHARSET_SIZE
+  );
+  VIEWPORT_CTX.fillStyle = colorSet.visitors;
+  VIEWPORT_CTX.fillRect(
+    VIEWPORT.width - 100 - CHARSET_SIZE, CHARSET_SIZE,
+    spaceCaptured.visitors, CHARSET_SIZE
   );
   //renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
 }
@@ -506,7 +521,9 @@ function renderPaintAmno() {
     CHARSET_SIZE - 1, VIEWPORT.height - CHARSET_SIZE - Math.floor(MAX_AMNO/3) - 1,
     2*CHARSET_SIZE + 2, Math.floor(MAX_AMNO/3) + 2
   );
-  VIEWPORT_CTX.fillStyle = `hsl(${hue} 90% 50%)`;
+  VIEWPORT_CTX.fillStyle = colorSet.neutral;
+  VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - Math.floor(MAX_AMNO/3), 2*CHARSET_SIZE, Math.floor(MAX_AMNO/3));
+  VIEWPORT_CTX.fillStyle = colorSet.homeTeam;
   VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - hero.paintAmno/3, 2*CHARSET_SIZE, hero.paintAmno/3);
 
   // renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
@@ -552,8 +569,8 @@ function renderMap() {
 const toHex = i => (i>>4).toString(16)
 
 function countColors() {
-  // make a scaled down version of PAINT
-  // to reduce the number of pixels we have to count colors on
+  // make a scaled down version of PAINT to reduce
+  // the number of pixels we have to count colors from
   MINI_PAINT_CTX.drawImage(
     PAINT,
     0, 0, PAINT.width, PAINT.height,
@@ -562,20 +579,25 @@ function countColors() {
 
   const imageData = MINI_PAINT_CTX.getImageData(0, 0, MINI_PAINT.width, MINI_PAINT.height);
   const totalPixels = imageData.width * imageData.height;
-  let coloredPixels = 0;
+  let coloredPixels = {};
   const data = imageData.data;
   for (let p = 0; p < data.length; p += 4) {
-    if (data[p+3] >= 250) {
-      coloredPixels += 1;
+    // discard anti-aliased colors
+    if (data[p+3] === 255) {
+      const color = '#' + [data[p], data[p+1], data[p+2]].map(toHex).join('');
+      coloredPixels[color] = (coloredPixels[color] || 0) + 1;
     }
   }
   // pixel counts to percentage of total pixels (e.g. blue = 4.2%)
-  return (coloredPixels*100/totalPixels).toFixed(2);
+  return {
+    homeTeam: ((coloredPixels[colorSet.homeTeam] || 0)*100/totalPixels).toFixed(2),
+    visitors: ((coloredPixels[colorSet.visitors] || 0)*100/totalPixels).toFixed(2)
+  };
 }
 
 function resetPaint() {
   PAINT_CTX.clearRect(0, 0, PAINT.width, PAINT.height);
-  bluePercentage = 0;
+  spaceCaptured = 0;
 }
 
 // LOOP HANDLERS
