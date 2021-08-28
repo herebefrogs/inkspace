@@ -6,7 +6,7 @@
   "scripts": {
     "clean": "rm -rf dist && mkdir dist",
     "build": "run-s clean build:*",
-    "build:js": "esbuild src/js/game.js --bundle --format=iife --loader:.webp=dataurl | terser --config-file scripts/terser.config.js -o dist/game.js",
+    "build:js": "esbuild src/js/game.js --bundle --format=iife --loader:.webp=dataurl | terser --config-file scripts/terser.config.js | roadroller --optimize 2 -o dist/game.js -t js -- -",
     "build:html": "grep -v '<body' src/index.html | html-inline -b dist | html-minifier -c scripts/htmlmin.json -o dist/index.html",
     "build:zip": "zip -FS -qjX9 dist/game.zip dist/index.html && advzip -z -4 dist/game.zip",
     "build:zipSize": "node scripts/zipSize.js",
@@ -24,6 +24,7 @@
     "html-inline": "^1.2.0",
     "html-minifier": "^4.0.0",
     "npm-run-all": "^4.1.5",
+    "roadroller": "^2.0.0",
     "terser": "^5.6.1",
     "tinify": "^1.6.0-beta.2"
   },
