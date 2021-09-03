@@ -12,8 +12,8 @@ game feature
   - [x] replenish slowly when not
   - [x] render counter on screens
 - [x] render territory capture visually (2 colors from a set of predefined colors)
-- win/loose screen (with stats of % captured)
-  - font -> "impact" instead of bitmap
+- [x] win/loose screen (with stats of % captured)
+  - [x] font -> "impact" instead of bitmap
   - game duration (currently 60s)
 - bots
   - move toward unpainted/enemy painted territory

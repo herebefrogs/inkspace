@@ -3,7 +3,7 @@ import { checkMonetization, isMonetizationEnabled } from './monetization';
 import { loadSongs, playSound, playSong } from './sound';
 import { initSpeech } from './speech';
 import { save, load } from './storage';
-import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
+import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText, renderBitmapText } from './text';
 import { choice, clamp, getRandSeed, setRandSeed, lerp, loadImg, rand, randInt } from './utils';
 
 
@@ -35,15 +35,15 @@ let speak;
 // RENDER VARIABLES
 
 // visible canvas (size will be readjusted on load and on resize)
-const [CTX] = createCanvas(480, 360, c);
+const [CTX] = createCanvas(640, 480, c);
 // full map, rendered off screen
-const [MAP_CTX, MAP] = createCanvas(480, 360);
+const [MAP_CTX, MAP] = createCanvas(1024, 768);
 // paint layer, rendered off screen
-const [PAINT_CTX, PAINT] = createCanvas(480, 360);
+const [PAINT_CTX, PAINT] = createCanvas(1024, 768);
 // shrunk down version of paint layer to optimize % of captured space calculation
 const [MINI_PAINT_CTX, MINI_PAINT] = createCanvas(160, 120);
 // visible portion of the map, seen from camera
-const [VIEWPORT_CTX, VIEWPORT] = createCanvas(320, 240);
+const [VIEWPORT_CTX, VIEWPORT] = createCanvas(480, 360);
 
 // camera-window & edge-snapping settings
 const CAMERA_WINDOW_X = 100;
@@ -55,7 +55,6 @@ let viewportOffsetY;
 let canvasX;
 let scaleToFit;
 
-const BLUE_PAINT = '#00a';
 const COLOR_SETS = [
   { homeTeam: '#0b6', visitors: '#b08', neutral: '#ab0' },
   { homeTeam: '#61b', visitors: '#1b7', neutral: '#d47' },
@@ -448,10 +447,14 @@ function render() {
 
   switch (screen) {
     case TITLE_SCREEN:
-      renderText('title screen', CHARSET_SIZE, CHARSET_SIZE);
-      renderText(isMobile ? 'tap to start' : 'press any key', VIEWPORT.width / 2, VIEWPORT.height / 2, ALIGN_CENTER);
+      renderText(document.title, VIEWPORT.width / 2, 4*CHARSET_SIZE, ALIGN_CENTER, 4);
+      renderBitmapText('move: wasd/qzsd or arrow keys', VIEWPORT.width / 2, VIEWPORT.height / 2 - 4*CHARSET_SIZE, ALIGN_CENTER);
+      renderBitmapText('shoot: space or left click', VIEWPORT.width / 2, VIEWPORT.height / 2 - 2*CHARSET_SIZE, ALIGN_CENTER);
+      renderBitmapText('aim: mouse', VIEWPORT.width / 2, VIEWPORT.height / 2, ALIGN_CENTER);
+
+      renderBitmapText(isMobile ? 'tap to start' : 'press any key', VIEWPORT.width / 2, VIEWPORT.height / 2 + 6*CHARSET_SIZE, ALIGN_CENTER);
       if (konamiIndex === konamiCode.length) {
-        renderText('konami mode on', VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+        renderBitmapText('konami mode on', VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       }
       break;
     case GAME_SCREEN:
@@ -474,8 +477,10 @@ function render() {
       renderPaintAmno();
       break;
     case END_SCREEN:
-      renderText('end screen', CHARSET_SIZE, CHARSET_SIZE);
-      // renderText(monetizationEarned(), TEXT.width - CHARSET_SIZE, TEXT.height - 2*CHARSET_SIZE, ALIGN_RIGHT);
+      const msg = spaceCaptured.homeTeam > spaceCaptured.visitors ? 'won' : 'lost'
+      renderText(`You ${msg}!`, VIEWPORT.width / 2, VIEWPORT.height / 2, ALIGN_CENTER, 2, '#fff');
+      renderBitmapText(`home: ${spaceCaptured.homeTeam}%`, CHARSET_SIZE, VIEWPORT.height / 2, );
+      renderBitmapText(`visitors: ${spaceCaptured.visitors}%`, VIEWPORT.width - CHARSET_SIZE, VIEWPORT.height / 2, ALIGN_RIGHT);
       break;
   }
 
@@ -511,7 +516,7 @@ function renderSpaceCaptured() {
     VIEWPORT.width - 100 - CHARSET_SIZE, CHARSET_SIZE,
     spaceCaptured.visitors, CHARSET_SIZE
   );
-  //renderText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+  //renderBitmapText(`captured: ${bluePercentage || 0}%`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
 }
 
 function renderPaintAmno() {
@@ -526,13 +531,13 @@ function renderPaintAmno() {
   VIEWPORT_CTX.fillStyle = colorSet.homeTeam;
   VIEWPORT_CTX.fillRect(CHARSET_SIZE, VIEWPORT.height - CHARSET_SIZE - hero.paintAmno/3, 2*CHARSET_SIZE, hero.paintAmno/3);
 
-  // renderText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
+  // renderBitmapText(`paint: ${hero.paintAmno}`, CHARSET_SIZE, VIEWPORT.height - 2*CHARSET_SIZE);
 };
 
 function renderCountdown() {
   const minutes = Math.floor(Math.ceil(countdown) / 60);
   const seconds = Math.ceil(countdown) - minutes * 60;
-  renderText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, CHARSET_SIZE, CHARSET_SIZE);
+  renderBitmapText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, CHARSET_SIZE, CHARSET_SIZE);
 
 };
 
