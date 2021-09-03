@@ -2,7 +2,7 @@
 
 game feature
 ============
-- find a name for the game (don't put Space in it )
+- [x] find a name for the game (don't put Space in it)
 - [x] bullet explodes at destination
   - [x] leave a paint splat
   - [x] remove bullet from entities
@@ -34,6 +34,7 @@ game feature
   - sniper gun (low cadence, fast speed, high damage/paint splat)
 - konami code for what?
 - Coil for what?
+  - more paint
 - multiplayer / server category (unlikely...)
   - means lobby to find games
   - player names
