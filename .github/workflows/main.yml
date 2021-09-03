@@ -6,7 +6,7 @@ name: CI
 # triggers the workflow on push or pull request events for the main branch
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   # workflow contains a single job called "build"
